@@ -2,9 +2,7 @@ package cmd
 
 import (
 	"context"
-	"errors"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 	"os"
 	"sync"
 	"xmpp-bouncer/client"
@@ -50,45 +48,10 @@ func runCommand(command *cobra.Command, _ []string) {
 		}
 	}()
 
-	joinRooms(ctx, connection)
+	client.JoinRooms(ctx, connection)
 
 	logger.Sugar.Infow("running...")
 	wg.Wait()
-}
-
-type Room struct {
-	RoomAddress string `yaml:"room_address"`
-	RoomPass    string `yaml:"room_pass"`
-}
-
-type Rooms struct {
-	Rooms map[string]Room `yaml:"rooms"`
-}
-
-func joinRooms(ctx context.Context, connection client.Connection) {
-	if _, err := os.Stat("rooms.yaml"); errors.Is(err, os.ErrNotExist) {
-		logger.Sugar.Info("no 'rooms.yaml' present")
-		return
-	}
-
-	yamlFile, err := os.ReadFile("rooms.yaml")
-	if err != nil {
-		logger.Sugar.Fatalw("unable to open 'rooms.yaml'", "error", err)
-	}
-
-	var roomData Rooms
-	err = yaml.Unmarshal(yamlFile, &roomData)
-	if err != nil {
-		logger.Sugar.Fatalw("unable to unmarshal 'rooms.yaml'", "error", err)
-	}
-
-	for roomName, roomInfo := range roomData.Rooms {
-		logger.Sugar.Infow("joining room", "room", roomName)
-		err = client.JoinRoom(ctx, connection, roomInfo.RoomAddress, roomInfo.RoomPass)
-		if err != nil {
-			logger.Sugar.Fatalw("failed to join room", "room", roomName, "error", err)
-		}
-	}
 }
 
 func Execute() {
