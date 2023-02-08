@@ -37,6 +37,7 @@ func JoinRoom(ctx context.Context, connection Connection, room string, roomPass 
 	if roomPass != "" {
 		opts = append(opts, muc.Password(roomPass))
 	}
+	opts = append(opts, muc.MaxBytes(10*1024))
 
 	_, err = connection.Client.Join(ctx, roomJID, connection.Session, opts...)
 	if err != nil {

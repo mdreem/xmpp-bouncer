@@ -25,7 +25,7 @@ func runCommand(command *cobra.Command, _ []string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	connection, err := client.Connect(ctx, username, password, persistence.ReceiveMessage(persistence.New()))
+	connection, err := client.Connect(ctx, username, password, persistence.ReceiveMessage(persistence.NewFileWriter()))
 	if err != nil {
 		logger.Sugar.Fatalw("failed to establish connection", "error", err)
 	}

@@ -6,14 +6,27 @@ import (
 	"mellium.im/xmlstream"
 	"mellium.im/xmpp/mux"
 	"mellium.im/xmpp/stanza"
+	"time"
 	"xmpp-bouncer/logger"
 )
 
 type messageBody struct {
 	stanza.Message
-	Subject string `xml:"subject,omitempty"`
-	Thread  string `xml:"thread,omitempty"`
-	Body    string `xml:"body"`
+	Subject  string   `xml:"subject,omitempty"`
+	Thread   string   `xml:"thread,omitempty"`
+	Body     string   `xml:"body"`
+	Delay    delay    `xml:"delay"`
+	StanzaID stanzaID `xml:"stanza-id"`
+}
+
+type stanzaID struct {
+	By string `xml:"by,attr,omitempty"`
+	Id string `xml:"id,attr,omitempty"`
+}
+
+type delay struct {
+	Stamp time.Time `xml:"stamp,attr,omitempty"`
+	From  string    `xml:"from,attr,omitempty"`
 }
 
 func ReceiveMessage(chatWriter ChatWriter) mux.MessageHandlerFunc {
@@ -31,13 +44,18 @@ func ReceiveMessage(chatWriter ChatWriter) mux.MessageHandlerFunc {
 			return nil
 		}
 
-		err = chatWriter.Write(msg.ID, from.String(), msg.Subject, msg.Body)
+		var timestamp = msg.Delay.Stamp
+		if (timestamp == time.Time{}) {
+			timestamp = time.Now().UTC()
+		}
+
+		err = chatWriter.Write(timestamp, msg.StanzaID.Id, from.String(), msg.Subject, msg.Body)
 		if err != nil {
 			logger.Sugar.Errorw("error persisting message", "error", err)
 			return nil
 		}
 
-		logger.Sugar.Infow("message", "from", from, "subject", msg.Subject, "body", msg.Body)
+		logger.Sugar.Infow("message", "ID", msg.StanzaID.Id, "from", from, "subject", msg.Subject, "body", msg.Body, "msg_timestamp", timestamp)
 		return nil
 	}
 }
