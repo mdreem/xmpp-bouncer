@@ -2,8 +2,9 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"github.com/spf13/cobra"
-	"os"
+	"github.com/spf13/viper"
 	"sync"
 	"xmpp-bouncer/client"
 	"xmpp-bouncer/common"
@@ -16,16 +17,38 @@ var RootCmd = &cobra.Command{
 	Run: runCommand,
 }
 
+func getEnvVar(name string) string {
+	result := viper.Get(name)
+	if result == nil {
+		logger.Sugar.Fatalw("failed to get env variable", "name", name)
+	}
+
+	return result.(string)
+}
+
 func runCommand(command *cobra.Command, _ []string) {
 	logger.Sugar.Infow("starting xmpp-bouncer...")
 
-	username := common.GetString(command, "username")
-	password := common.GetString(command, "password")
+	hostname := common.GetString(command, "hostname")
+	port := common.GetString(command, "port")
+
+	viper.SetEnvPrefix("xmpp")
+	viper.AutomaticEnv()
+
+	username := getEnvVar("USERNAME")
+	password := getEnvVar("PASSWORD")
+
+	dbUsername := getEnvVar("DB_USERNAME")
+	dbPassword := getEnvVar("DB_PASSWORD")
+
+	logger.Sugar.Infow("PASSWORD...", "dbUsername", dbUsername, "dbPassword", dbPassword)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	connection, err := client.Connect(ctx, username, password, persistence.ReceiveMessage(persistence.NewFileWriter()))
+	connectionString := fmt.Sprintf("%s:%s@tcp(%s:%s)/database", dbUsername, dbPassword, hostname, port)
+	dbWriter := persistence.NewDBWriter(connectionString)
+	connection, err := client.Connect(ctx, username, password, persistence.ReceiveMessage(dbWriter))
 	if err != nil {
 		logger.Sugar.Fatalw("failed to establish connection", "error", err)
 	}
@@ -62,17 +85,15 @@ func Execute() {
 
 func init() {
 	flags := RootCmd.PersistentFlags()
-	flags.StringP("username", "u", "", "username.")
-	flags.StringP("password", "p", "", "password.")
+	flags.StringP("hostname", "H", "", "hostname.")
+	flags.StringP("port", "p", "3306", "port.")
 
-	markPersistentFlagRequired("username")
-	markPersistentFlagRequired("password")
+	markPersistentFlagRequired("hostname")
 }
 
 func markPersistentFlagRequired(flagName string) {
 	err := RootCmd.MarkPersistentFlagRequired(flagName)
 	if err != nil {
-		logger.Sugar.Errorw("unable to set flag to required.", "flag", flagName)
-		os.Exit(1)
+		logger.Sugar.Fatalw("unable to set flag to required.", "flag", flagName)
 	}
 }
