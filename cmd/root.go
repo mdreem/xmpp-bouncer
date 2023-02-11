@@ -41,8 +41,6 @@ func runCommand(command *cobra.Command, _ []string) {
 	dbUsername := getEnvVar("DB_USERNAME")
 	dbPassword := getEnvVar("DB_PASSWORD")
 
-	logger.Sugar.Infow("PASSWORD...", "dbUsername", dbUsername, "dbPassword", dbPassword)
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 

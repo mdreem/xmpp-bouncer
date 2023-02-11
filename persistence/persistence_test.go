@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
+	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
@@ -46,15 +47,9 @@ func prepareTable(connectionString string) error {
 	}
 	defer db.Close()
 
-	stmt, err := db.Prepare("CREATE TABLE chats(msg_timestamp DATETIME, msg_id varchar(255), from_address varchar(255), subject varchar(255), body MEDIUMTEXT)")
+	err = migrateDatabase(filepath.Join("..", "migrations"), db)
 	if err != nil {
-		return fmt.Errorf("unable to prepare statement: %w", err)
-	}
-	defer stmt.Close()
-
-	_, err = stmt.Exec()
-	if err != nil {
-		return fmt.Errorf("unable to write to the database: %w", err)
+		return fmt.Errorf("unable to migrate database: %w", err)
 	}
 	return nil
 }
@@ -113,9 +108,13 @@ func Test_dbClient_Write(t *testing.T) {
 
 	writer := NewDBWriter(connectionString)
 
-	err = writer.Write(time.UnixMilli(1234567), "coffee", "the.arm@blacklodge", "fire", "fire walk with me")
-	if err != nil {
-		t.Fatalf("error writing to DB: %v", err)
+	referenceTime := time.Date(2023, 1, 1, 11, 22, 33, 0, time.UTC)
+
+	for i := 0; i < 2; i++ {
+		err = writer.Write(referenceTime, "coffee", "the.arm@blacklodge", "fire", "fire walk with me")
+		if err != nil {
+			t.Fatalf("error writing to DB: %v", err)
+		}
 	}
 
 	data, err := queryData(connectionString)
@@ -128,7 +127,7 @@ func Test_dbClient_Write(t *testing.T) {
 	}
 
 	testData := []chatLine{{
-		msgTimestamp: time.UnixMilli(1234567),
+		msgTimestamp: referenceTime,
 		msgId:        "coffee",
 		fromAddress:  "the.arm@blacklodge",
 		subject:      "fire",
@@ -136,6 +135,7 @@ func Test_dbClient_Write(t *testing.T) {
 	}}
 
 	if !(reflect.DeepEqual(data, testData)) {
+		t.Errorf("%v - %v", testData[0].msgTimestamp, data[0].msgTimestamp)
 		t.Errorf("expected '%v' but got '%v'", testData, data)
 	}
 }

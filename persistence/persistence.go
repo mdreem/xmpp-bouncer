@@ -5,7 +5,9 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/go-sql-driver/mysql"
-	_ "github.com/go-sql-driver/mysql"
+	"github.com/golang-migrate/migrate/v4"
+	migrate_mysql "github.com/golang-migrate/migrate/v4/database/mysql"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"time"
 	"xmpp-bouncer/logger"
 )
@@ -21,9 +23,38 @@ func NewDBWriter(connectionString string) ChatWriter {
 	}
 	db.SetConnMaxLifetime(time.Minute * 3)
 
+	err = migrateDatabase("migrations", db)
+	if err != nil {
+		logger.Sugar.Fatalw("unable to migrate database", "error", err)
+	}
+
 	return dbClient{
 		db: db,
 	}
+}
+
+func migrateDatabase(location string, db *sql.DB) error {
+	driver, _ := migrate_mysql.WithInstance(db, &migrate_mysql.Config{})
+	migrationsLocation := fmt.Sprintf("file://%s", location)
+	logger.Sugar.Infow("migrations are located here", "location", migrationsLocation)
+
+	m, err := migrate.NewWithDatabaseInstance(
+		migrationsLocation,
+		"mysql",
+		driver,
+	)
+	if err != nil {
+		return fmt.Errorf("unable to initialize migrations: %w", err)
+	}
+
+	err = m.Up()
+	if err != nil && err != migrate.ErrNoChange {
+		return fmt.Errorf("unable to migrate: %w", err)
+	}
+	if err == migrate.ErrNoChange {
+		logger.Sugar.Info("no change during migration")
+	}
+	return nil
 }
 
 type ChatWriter interface {
