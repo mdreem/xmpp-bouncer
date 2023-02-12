@@ -62,7 +62,7 @@ jobs:
     - name: Check out code into the Go module directory
       uses: actions/checkout@v3
       with:
-        token: ${{ secrets.PAT }}
+        token: ${{ secrets.GITHUB_TOKEN }}
         fetch-depth: 0
 
     - name: Create new tag
