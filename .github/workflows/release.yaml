@@ -24,32 +24,12 @@ jobs:
       - name: Compile
         run: make compile
 
-      - uses: actions/upload-artifact@v2
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
         with:
-          name: xmpp_bouncer
-          path: bin/
-
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
-          draft: false
-          prerelease: false
-
-      - name: Upload Release Asset for Linux
-        id: upload-release-asset-linux
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./bin/linux-amd64/xmpp_bouncer
-          asset_name: xmpp_bouncer-linux-amd64
-          asset_content_type: application/octet-stream
+          files: |
+            ./bin/linux-amd64/xmpp_bouncer
 
       - name: Build image
         run: make docker_build
