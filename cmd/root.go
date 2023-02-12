@@ -2,10 +2,9 @@ package cmd
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
-	"os"
+	"github.com/spf13/viper"
 	"sync"
 	"xmpp-bouncer/client"
 	"xmpp-bouncer/common"
@@ -18,16 +17,30 @@ var RootCmd = &cobra.Command{
 	Run: runCommand,
 }
 
+func getEnvVar(name string) string {
+	result := viper.Get(name)
+	if result == nil {
+		logger.Sugar.Fatalw("failed to get env variable", "name", name)
+	}
+
+	return result.(string)
+}
+
 func runCommand(command *cobra.Command, _ []string) {
 	logger.Sugar.Infow("starting xmpp-bouncer...")
 
-	username := common.GetString(command, "username")
-	password := common.GetString(command, "password")
+	viper.SetEnvPrefix("xmpp")
+	viper.AutomaticEnv()
+
+	username := getEnvVar("USERNAME")
+	password := getEnvVar("PASSWORD")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	connection, err := client.Connect(ctx, username, password, persistence.ReceiveMessage(persistence.New()))
+	connectionString := getConnectionString(command)
+	dbWriter := persistence.NewDBWriter(connectionString)
+	connection, err := client.Connect(ctx, username, password, persistence.ReceiveMessage(dbWriter))
 	if err != nil {
 		logger.Sugar.Fatalw("failed to establish connection", "error", err)
 	}
@@ -50,45 +63,21 @@ func runCommand(command *cobra.Command, _ []string) {
 		}
 	}()
 
-	joinRooms(ctx, connection)
+	client.JoinRooms(ctx, connection)
 
 	logger.Sugar.Infow("running...")
 	wg.Wait()
 }
 
-type Room struct {
-	RoomAddress string `yaml:"room_address"`
-	RoomPass    string `yaml:"room_pass"`
-}
+func getConnectionString(command *cobra.Command) string {
+	hostname := common.GetString(command, "hostname")
+	port := common.GetString(command, "port")
+	database := common.GetString(command, "database")
 
-type Rooms struct {
-	Rooms map[string]Room `yaml:"rooms"`
-}
-
-func joinRooms(ctx context.Context, connection client.Connection) {
-	if _, err := os.Stat("rooms.yaml"); errors.Is(err, os.ErrNotExist) {
-		logger.Sugar.Info("no 'rooms.yaml' present")
-		return
-	}
-
-	yamlFile, err := os.ReadFile("rooms.yaml")
-	if err != nil {
-		logger.Sugar.Fatalw("unable to open 'rooms.yaml'", "error", err)
-	}
-
-	var roomData Rooms
-	err = yaml.Unmarshal(yamlFile, &roomData)
-	if err != nil {
-		logger.Sugar.Fatalw("unable to unmarshal 'rooms.yaml'", "error", err)
-	}
-
-	for roomName, roomInfo := range roomData.Rooms {
-		logger.Sugar.Infow("joining room", "room", roomName)
-		err = client.JoinRoom(ctx, connection, roomInfo.RoomAddress, roomInfo.RoomPass)
-		if err != nil {
-			logger.Sugar.Fatalw("failed to join room", "room", roomName, "error", err)
-		}
-	}
+	dbUsername := getEnvVar("DB_USERNAME")
+	dbPassword := getEnvVar("DB_PASSWORD")
+	connectionString := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", dbUsername, dbPassword, hostname, port, database)
+	return connectionString
 }
 
 func Execute() {
@@ -99,17 +88,16 @@ func Execute() {
 
 func init() {
 	flags := RootCmd.PersistentFlags()
-	flags.StringP("username", "u", "", "username.")
-	flags.StringP("password", "p", "", "password.")
+	flags.StringP("hostname", "H", "", "hostname.")
+	flags.StringP("port", "p", "3306", "port.")
+	flags.StringP("database", "d", "xmpp-bouncer", "database name.")
 
-	markPersistentFlagRequired("username")
-	markPersistentFlagRequired("password")
+	markPersistentFlagRequired("hostname")
 }
 
 func markPersistentFlagRequired(flagName string) {
 	err := RootCmd.MarkPersistentFlagRequired(flagName)
 	if err != nil {
-		logger.Sugar.Errorw("unable to set flag to required.", "flag", flagName)
-		os.Exit(1)
+		logger.Sugar.Fatalw("unable to set flag to required.", "flag", flagName)
 	}
 }

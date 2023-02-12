@@ -1,37 +1,96 @@
 package persistence
 
 import (
+	"crypto/sha256"
+	"database/sql"
 	"fmt"
-	"os"
+	"github.com/go-sql-driver/mysql"
+	"github.com/golang-migrate/migrate/v4"
+	migrate_mysql "github.com/golang-migrate/migrate/v4/database/mysql"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
+	"time"
 	"xmpp-bouncer/logger"
 )
 
 type dbClient struct {
+	db *sql.DB
 }
 
-func New() ChatWriter {
-	return dbClient{}
+func NewDBWriter(connectionString string) ChatWriter {
+	db, err := sql.Open("mysql", connectionString)
+	if err != nil {
+		panic(err)
+	}
+	db.SetConnMaxLifetime(time.Minute * 3)
+
+	err = migrateDatabase("migrations", db)
+	if err != nil {
+		logger.Sugar.Fatalw("unable to migrate database", "error", err)
+	}
+
+	return dbClient{
+		db: db,
+	}
+}
+
+func migrateDatabase(location string, db *sql.DB) error {
+	driver, _ := migrate_mysql.WithInstance(db, &migrate_mysql.Config{})
+	migrationsLocation := fmt.Sprintf("file://%s", location)
+	logger.Sugar.Infow("migrations are located here", "location", migrationsLocation)
+
+	migration, err := migrate.NewWithDatabaseInstance(
+		migrationsLocation,
+		"mysql",
+		driver,
+	)
+	if err != nil {
+		return fmt.Errorf("unable to initialize migrations: %w", err)
+	}
+
+	err = migration.Up()
+	if err != nil && err != migrate.ErrNoChange {
+		return fmt.Errorf("unable to migrate: %w", err)
+	}
+	if err == migrate.ErrNoChange {
+		logger.Sugar.Info("no change during migration")
+	}
+	return nil
 }
 
 type ChatWriter interface {
-	Write(ID string, from string, subject string, body string) error
+	Write(timestamp time.Time, ID string, from string, subject string, body string) error
 }
 
-func (client dbClient) Write(ID string, from string, subject string, body string) error {
-	f, err := os.OpenFile("messages.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return fmt.Errorf("error opening file to write: %w", err)
-	}
-	defer func() {
-		err := f.Close()
-		if err != nil {
-			logger.Sugar.Errorw("error closing file file", "error", err)
-		}
-	}()
+func createHashString(from string, subject string, body string) string {
+	hash := sha256.Sum256([]byte(fmt.Sprintf("%s-%s-%s", from, subject, body)))
+	hashString := fmt.Sprintf("%x", hash[:])
+	return hashString
+}
 
-	_, err = f.WriteString(fmt.Sprintf("%s;%s;%s;%s\n", ID, from, subject, body))
+func (client dbClient) Write(timestamp time.Time, ID string, from string, subject string, body string) error {
+	stmt, err := client.db.Prepare("INSERT INTO chats(msg_timestamp, msg_id, msg_hash, from_address, subject, body) VALUES(?,?,?,?,?,?)")
 	if err != nil {
-		return fmt.Errorf("error writing message to file: %w", err)
+		return fmt.Errorf("unable to prepare statement: %w", err)
 	}
+	defer stmt.Close()
+
+	hashString := createHashString(from, subject, body)
+	res, err := stmt.Exec(timestamp, ID, hashString, from, subject, body)
+	if err != nil {
+		if mysqlError, ok := err.(*mysql.MySQLError); ok {
+			if mysqlError.Number == 1062 {
+				logger.Sugar.Debugw("ignoring duplicate entry", "msg_id", ID, "msg_hash", hashString)
+				return nil
+			}
+		}
+		return fmt.Errorf("unable to write to the database: %w", err)
+	}
+
+	lastId, err := res.LastInsertId()
+	if err != nil {
+		return fmt.Errorf("unable to retrieve lastId: %w", err)
+	}
+
+	logger.Sugar.Debugw("inserted chat line", "lastId", lastId)
 	return nil
 }
