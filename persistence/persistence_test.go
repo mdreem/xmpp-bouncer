@@ -4,12 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/wait"
 	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 )
 
 type mysqlContainer struct {
@@ -38,20 +39,6 @@ func setupMysql(ctx context.Context) (*mysqlContainer, error) {
 	}
 
 	return &mysqlContainer{Container: container}, nil
-}
-
-func prepareTable(connectionString string) error {
-	db, err := sql.Open("mysql", connectionString)
-	if err != nil {
-		return fmt.Errorf("unable to open connection: %w", err)
-	}
-	defer db.Close()
-
-	err = migrateDatabase(filepath.Join("..", "migrations"), db)
-	if err != nil {
-		return fmt.Errorf("unable to migrate database: %w", err)
-	}
-	return nil
 }
 
 type chatLine struct {
@@ -101,12 +88,12 @@ func Test_dbClient_Write(t *testing.T) {
 
 	connectionString := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?tls=skip-verify&parseTime=true", "root", "password", host, port, "database")
 
-	err = prepareTable(connectionString)
+	writer := NewDBWriter(connectionString)
+	writer.Migrate(filepath.Join("..", "migrations"))
+
 	if err != nil {
 		t.Fatalf("error creating table: %v", err)
 	}
-
-	writer := NewDBWriter(connectionString)
 
 	referenceTime := time.Date(2023, 1, 1, 11, 22, 33, 0, time.UTC)
 

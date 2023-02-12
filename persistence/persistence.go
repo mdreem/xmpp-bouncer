@@ -4,37 +4,33 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"fmt"
+	"time"
+	"xmpp-bouncer/logger"
+
 	"github.com/go-sql-driver/mysql"
 	"github.com/golang-migrate/migrate/v4"
 	migrate_mysql "github.com/golang-migrate/migrate/v4/database/mysql"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
-	"time"
-	"xmpp-bouncer/logger"
 )
 
 type dbClient struct {
 	db *sql.DB
 }
 
-func NewDBWriter(connectionString string) ChatWriter {
+func NewDBWriter(connectionString string) MigrateableChatWriter {
 	db, err := sql.Open("mysql", connectionString)
 	if err != nil {
 		panic(err)
 	}
 	db.SetConnMaxLifetime(time.Minute * 3)
 
-	err = migrateDatabase("migrations", db)
-	if err != nil {
-		logger.Sugar.Fatalw("unable to migrate database", "error", err)
-	}
-
 	return dbClient{
 		db: db,
 	}
 }
 
-func migrateDatabase(location string, db *sql.DB) error {
-	driver, _ := migrate_mysql.WithInstance(db, &migrate_mysql.Config{})
+func (client dbClient) Migrate(location string) error {
+	driver, _ := migrate_mysql.WithInstance(client.db, &migrate_mysql.Config{})
 	migrationsLocation := fmt.Sprintf("file://%s", location)
 	logger.Sugar.Infow("migrations are located here", "location", migrationsLocation)
 
@@ -55,6 +51,11 @@ func migrateDatabase(location string, db *sql.DB) error {
 		logger.Sugar.Info("no change during migration")
 	}
 	return nil
+}
+
+type MigrateableChatWriter interface {
+	ChatWriter
+	Migrate(location string) error
 }
 
 type ChatWriter interface {
