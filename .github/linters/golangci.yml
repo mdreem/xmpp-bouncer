@@ -1,0 +1,25 @@
+linters:
+  enable:
+    - bodyclose
+    - depguard
+    - gocritic
+    - gofmt
+    - revive
+    - goprintffuncname
+    - gosimple
+    - govet
+    - ineffassign
+    - misspell
+    - nakedret
+    - nolintlint
+    - rowserrcheck
+    - staticcheck
+    - stylecheck
+    - typecheck
+    - unconvert
+    - unparam
+    - whitespace
+    - unused
+run:
+  build-tags:
+    testing
