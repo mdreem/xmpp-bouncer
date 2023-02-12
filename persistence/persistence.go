@@ -38,7 +38,7 @@ func migrateDatabase(location string, db *sql.DB) error {
 	migrationsLocation := fmt.Sprintf("file://%s", location)
 	logger.Sugar.Infow("migrations are located here", "location", migrationsLocation)
 
-	m, err := migrate.NewWithDatabaseInstance(
+	migration, err := migrate.NewWithDatabaseInstance(
 		migrationsLocation,
 		"mysql",
 		driver,
@@ -47,7 +47,7 @@ func migrateDatabase(location string, db *sql.DB) error {
 		return fmt.Errorf("unable to initialize migrations: %w", err)
 	}
 
-	err = m.Up()
+	err = migration.Up()
 	if err != nil && err != migrate.ErrNoChange {
 		return fmt.Errorf("unable to migrate: %w", err)
 	}

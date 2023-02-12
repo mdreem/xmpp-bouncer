@@ -29,22 +29,16 @@ func getEnvVar(name string) string {
 func runCommand(command *cobra.Command, _ []string) {
 	logger.Sugar.Infow("starting xmpp-bouncer...")
 
-	hostname := common.GetString(command, "hostname")
-	port := common.GetString(command, "port")
-
 	viper.SetEnvPrefix("xmpp")
 	viper.AutomaticEnv()
 
 	username := getEnvVar("USERNAME")
 	password := getEnvVar("PASSWORD")
 
-	dbUsername := getEnvVar("DB_USERNAME")
-	dbPassword := getEnvVar("DB_PASSWORD")
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	connectionString := fmt.Sprintf("%s:%s@tcp(%s:%s)/database", dbUsername, dbPassword, hostname, port)
+	connectionString := getConnectionString(command)
 	dbWriter := persistence.NewDBWriter(connectionString)
 	connection, err := client.Connect(ctx, username, password, persistence.ReceiveMessage(dbWriter))
 	if err != nil {
@@ -75,6 +69,17 @@ func runCommand(command *cobra.Command, _ []string) {
 	wg.Wait()
 }
 
+func getConnectionString(command *cobra.Command) string {
+	hostname := common.GetString(command, "hostname")
+	port := common.GetString(command, "port")
+	database := common.GetString(command, "database")
+
+	dbUsername := getEnvVar("DB_USERNAME")
+	dbPassword := getEnvVar("DB_PASSWORD")
+	connectionString := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", dbUsername, dbPassword, hostname, port, database)
+	return connectionString
+}
+
 func Execute() {
 	if err := RootCmd.Execute(); err != nil {
 		logger.Sugar.Fatalw("could not execute command. ", "error", err)
@@ -85,6 +90,7 @@ func init() {
 	flags := RootCmd.PersistentFlags()
 	flags.StringP("hostname", "H", "", "hostname.")
 	flags.StringP("port", "p", "3306", "port.")
+	flags.StringP("database", "d", "xmpp-bouncer", "database name.")
 
 	markPersistentFlagRequired("hostname")
 }
