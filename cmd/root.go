@@ -3,13 +3,14 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"sync"
 	"xmpp-bouncer/client"
 	"xmpp-bouncer/common"
 	"xmpp-bouncer/logger"
 	"xmpp-bouncer/persistence"
+
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 var RootCmd = &cobra.Command{
@@ -40,6 +41,12 @@ func runCommand(command *cobra.Command, _ []string) {
 
 	connectionString := getConnectionString(command)
 	dbWriter := persistence.NewDBWriter(connectionString)
+
+	err := dbWriter.Migrate("migrations")
+	if err != nil {
+		logger.Sugar.Fatalw("unable to migrate database", "error", err)
+	}
+
 	connection, err := client.Connect(ctx, username, password, persistence.ReceiveMessage(dbWriter))
 	if err != nil {
 		logger.Sugar.Fatalw("failed to establish connection", "error", err)

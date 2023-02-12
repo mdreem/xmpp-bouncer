@@ -5,6 +5,9 @@ import (
 	"crypto/tls"
 	"encoding/xml"
 	"fmt"
+	"time"
+	"xmpp-bouncer/logger"
+
 	"mellium.im/sasl"
 	"mellium.im/xmpp"
 	"mellium.im/xmpp/dial"
@@ -12,8 +15,6 @@ import (
 	"mellium.im/xmpp/muc"
 	"mellium.im/xmpp/mux"
 	"mellium.im/xmpp/stanza"
-	"time"
-	"xmpp-bouncer/logger"
 )
 
 type Connection struct {
@@ -65,12 +66,12 @@ func createSession(ctx context.Context, jid jid.JID, password string) (*xmpp.Ses
 }
 
 func Connect(ctx context.Context, address string, password string, messageHandlerFunc mux.MessageHandlerFunc) (Connection, error) {
-	jabberId, err := jid.Parse(address)
+	jabberID, err := jid.Parse(address)
 	if err != nil {
 		return Connection{}, fmt.Errorf("error parsing address %q: %w", address, err)
 	}
 
-	session, err := createSession(ctx, jabberId, password)
+	session, err := createSession(ctx, jabberID, password)
 	if err != nil {
 		return Connection{}, fmt.Errorf("error creating session: %w", err)
 	}
@@ -92,6 +93,6 @@ func Connect(ctx context.Context, address string, password string, messageHandle
 		Mux:     jabberMux,
 		Client:  mucClient,
 		Session: session,
-		Jid:     jabberId,
+		Jid:     jabberID,
 	}, nil
 }
