@@ -43,7 +43,7 @@ func setupMysql(ctx context.Context) (*mysqlContainer, error) {
 
 type chatLine struct {
 	msgTimestamp time.Time
-	msgId        string
+	msgID        string
 	fromAddress  string
 	subject      string
 	body         string
@@ -64,7 +64,7 @@ func queryData(connectionString string) ([]chatLine, error) {
 	chatLines := make([]chatLine, 0)
 	for results.Next() {
 		var curChatLine chatLine
-		err = results.Scan(&curChatLine.msgTimestamp, &curChatLine.msgId, &curChatLine.fromAddress, &curChatLine.subject, &curChatLine.body)
+		err = results.Scan(&curChatLine.msgTimestamp, &curChatLine.msgID, &curChatLine.fromAddress, &curChatLine.subject, &curChatLine.body)
 		if err != nil {
 			return []chatLine{}, fmt.Errorf("unable to scan data: %w", err)
 		}
@@ -89,10 +89,9 @@ func Test_dbClient_Write(t *testing.T) {
 	connectionString := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?tls=skip-verify&parseTime=true", "root", "password", host, port, "database")
 
 	writer := NewDBWriter(connectionString)
-	writer.Migrate(filepath.Join("..", "migrations"))
-
+	err = writer.Migrate(filepath.Join("..", "migrations"))
 	if err != nil {
-		t.Fatalf("error creating table: %v", err)
+		t.Fatalf("error migrating database: %v", err)
 	}
 
 	referenceTime := time.Date(2023, 1, 1, 11, 22, 33, 0, time.UTC)
@@ -115,7 +114,7 @@ func Test_dbClient_Write(t *testing.T) {
 
 	testData := []chatLine{{
 		msgTimestamp: referenceTime,
-		msgId:        "coffee",
+		msgID:        "coffee",
 		fromAddress:  "the.arm@blacklodge",
 		subject:      "fire",
 		body:         "fire walk with me",

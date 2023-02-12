@@ -21,14 +21,14 @@ type Rooms struct {
 }
 
 func JoinRoom(ctx context.Context, connection Connection, room string, roomPass string) error {
-	roomId, err := jid.Parse(room)
+	roomID, err := jid.Parse(room)
 	if err != nil {
 		return fmt.Errorf("error parsing room %s: %v", room, err)
 	}
 
-	logger.Sugar.Infow("joining the chat room", "chatroom", roomId.String())
+	logger.Sugar.Infow("joining the chat room", "chatroom", roomID.String())
 	username := connection.Jid.Localpart()
-	roomJID, err := roomId.WithResource(username)
+	roomJID, err := roomID.WithResource(username)
 	if err != nil {
 		return fmt.Errorf("error adding resource part %s: %v", username, err)
 	}

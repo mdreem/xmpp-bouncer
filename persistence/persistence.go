@@ -10,7 +10,7 @@ import (
 	"github.com/go-sql-driver/mysql"
 	"github.com/golang-migrate/migrate/v4"
 	migrate_mysql "github.com/golang-migrate/migrate/v4/database/mysql"
-	_ "github.com/golang-migrate/migrate/v4/source/file"
+	_ "github.com/golang-migrate/migrate/v4/source/file" // needed to load migration files
 )
 
 type dbClient struct {
@@ -59,7 +59,7 @@ type MigrateableChatWriter interface {
 }
 
 type ChatWriter interface {
-	Write(timestamp time.Time, ID string, from string, subject string, body string) error
+	Write(timestamp time.Time, id string, from string, subject string, body string) error
 }
 
 func createHashString(from string, subject string, body string) string {
@@ -68,7 +68,7 @@ func createHashString(from string, subject string, body string) string {
 	return hashString
 }
 
-func (client dbClient) Write(timestamp time.Time, ID string, from string, subject string, body string) error {
+func (client dbClient) Write(timestamp time.Time, id string, from string, subject string, body string) error {
 	stmt, err := client.db.Prepare("INSERT INTO chats(msg_timestamp, msg_id, msg_hash, from_address, subject, body) VALUES(?,?,?,?,?,?)")
 	if err != nil {
 		return fmt.Errorf("unable to prepare statement: %w", err)
@@ -76,22 +76,22 @@ func (client dbClient) Write(timestamp time.Time, ID string, from string, subjec
 	defer stmt.Close()
 
 	hashString := createHashString(from, subject, body)
-	res, err := stmt.Exec(timestamp, ID, hashString, from, subject, body)
+	res, err := stmt.Exec(timestamp, id, hashString, from, subject, body)
 	if err != nil {
 		if mysqlError, ok := err.(*mysql.MySQLError); ok {
 			if mysqlError.Number == 1062 {
-				logger.Sugar.Debugw("ignoring duplicate entry", "msg_id", ID, "msg_hash", hashString)
+				logger.Sugar.Debugw("ignoring duplicate entry", "msg_id", id, "msg_hash", hashString)
 				return nil
 			}
 		}
 		return fmt.Errorf("unable to write to the database: %w", err)
 	}
 
-	lastId, err := res.LastInsertId()
+	lastID, err := res.LastInsertId()
 	if err != nil {
 		return fmt.Errorf("unable to retrieve lastId: %w", err)
 	}
 
-	logger.Sugar.Debugw("inserted chat line", "lastId", lastId)
+	logger.Sugar.Debugw("inserted chat line", "lastId", lastID)
 	return nil
 }
