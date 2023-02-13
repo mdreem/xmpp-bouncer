@@ -2,10 +2,10 @@ set -eux
 git fetch --tags || echo "could not fetch tags"
 latest_version=$(git describe --tags --match "[0-9]*.[0-9]*.[0-9]*" --abbrev=0)
 
-merged_message=$(git log -1 | grep "Merge pull request .* from mdreem/.*" -o) \
+merged_message=$(git log -1 | grep "Merge pull request .* from mdreem[:/].*" -o) \
     || (echo "not a properly formatted merge commit" && exit 0)
 
-if [[ "${merged_message}" =~ Merge\ pull\ request\ .*\ from\ mdreem/(.*) ]];
+if [[ "${merged_message}" =~ Merge\ pull\ request\ .*\ from\ mdreem[:/](.*) ]];
 then
     merged_branch=${BASH_REMATCH[1]}
     echo "merged branch: ${merged_branch}"
