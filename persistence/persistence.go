@@ -20,9 +20,18 @@ type dbClient struct {
 func NewDBWriter(connectionString string) MigrateableChatWriter {
 	db, err := sql.Open("mysql", connectionString)
 	if err != nil {
-		panic(err)
+		logger.Sugar.Fatalw("sql open failed", "error", err)
 	}
 	db.SetConnMaxLifetime(time.Minute * 3)
+
+	stmt, err := db.Prepare("SELECT 1 from dual")
+	if err != nil {
+		logger.Sugar.Fatalw("initial sql prepare failed", "error", err)
+	}
+	_, err = stmt.Exec()
+	if err != nil {
+		logger.Sugar.Fatalw("initial sql exec failed", "error", err)
+	}
 
 	return dbClient{
 		db: db,
