@@ -3,7 +3,7 @@ module xmpp-bouncer
 go 1.19
 
 require (
-	github.com/go-sql-driver/mysql v1.7.0
+	github.com/go-sql-driver/mysql v1.7.1
 	github.com/golang-migrate/migrate/v4 v4.15.2
 	github.com/spf13/cobra v1.6.1
 	github.com/spf13/viper v1.15.0
