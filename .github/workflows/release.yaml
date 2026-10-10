@@ -1,41 +1,53 @@
+# Builds the container image for linux/amd64 and linux/arm64 and publishes it
+# to GHCR. The arm64 half matters: without it the image cannot run on an
+# arm64 node at all.
+name: image
+
 on:
   push:
-    tags:
-      - '[0-9]*.[0-9]*.[0-9]*'
+    branches: [master]
+    tags: ['[0-9]*.[0-9]*.[0-9]*']
+  workflow_dispatch:
 
-name: Upload Release Asset
+permissions:
+  contents: read
+  packages: write
 
 jobs:
-  build:
-    name: Upload Release Asset
+  image:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v5
 
-      - name: Get dependencies
-        run: |
-          go get -v -t -d ./...
-          if [ -f Gopkg.toml ]; then
-              curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
-              dep ensure
-          fi
+      # Only needed for the buildx driver; the Go build itself cross-compiles
+      # rather than emulating, so no QEMU is involved in compilation.
+      - uses: docker/setup-buildx-action@v3
 
-      - name: Compile
-        run: make compile
-
-      - name: Release
-        uses: softprops/action-gh-release@v1
-        if: startsWith(github.ref, 'refs/tags/')
+      - uses: docker/login-action@v3
         with:
-          files: |
-            ./bin/linux-amd64/xmpp_bouncer
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build image
-        run: make docker_build
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          # Keeps the existing package name (underscore) so tags 0.2.0-0.3.1
+          # and everything after live in one place, even though the repo is
+          # spelled with a hyphen.
+          images: ghcr.io/${{ github.repository_owner }}/xmpp_bouncer
+          tags: |
+            type=ref,event=tag
+            type=raw,value=master,enable=${{ github.ref == 'refs/heads/master' }}
+            type=sha,format=long
 
-      - name: Log into registry
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u $ --password-stdin
-
-      - name: Push image
-        run: make docker_push
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
